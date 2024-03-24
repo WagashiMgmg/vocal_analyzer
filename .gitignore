@@ -1,0 +1,4 @@
+/tests/
+/extracted/
+/__pycache__/
+*log*
