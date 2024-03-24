@@ -7,6 +7,9 @@ from scipy.fftpack import fft
 from scipy.signal import find_peaks
 from logging import getLogger, config
 import json
+from dotenv import load_dotenv
+load_dotenv()
+working_dir = os.getenv('WORK_DIR')
 
 #with open('./log_config.json') as f:
 #    log_conf = json.load(f)
@@ -25,37 +28,8 @@ max_freq = 1244.508 #D6#
 flagment = 0.17
 
 # 音声ファイルのパス
-audio_file  = 'sample.flac' #.flac .wav
-working_dir = './extracted'
 
-# ボーカル抽出
-vocal_file = extract_vocals(audio_file, working_dir)
-logger.debug("extract done")
-# .wavファイルの読み込み
-sample_rate, data = wav.read(vocal_file)
-
-# flagment秒ごとに区切るためのパラメータ
-window_size = int(sample_rate * flagment)
-hop_size = window_size
-
-# 周波数と時間のリストを初期化
-frequencies = []
-times = []
-
-# 最大振幅を検出
-maximum_vol = 0
-for i in range(0, len(data) - window_size, hop_size):
-    window = data[i:i+window_size]
-    window = [(window[j][0]+window[j][1]) for j in range (len(window))]
-    freq = fft(window)
-    freq = np.abs(freq)[:window_size//2]
-    freq_range = freq[int(min_freq * window_size / sample_rate):int(max_freq * window_size / sample_rate)]
-    if len(freq_range) > 0:
-        if np.max(freq_range) > maximum_vol:
-            maximum_vol = np.max(freq_range)
-
-
-def look_back(peaks, idx, largest, largestfreq, th = 0.4, step = 1): #一つまえのピークが良い感じの高さだったらそれにする
+def look_back(window_size, sample_rate, peaks, idx, largest, largestfreq, freq_range, th = 0.4, step = 1): #一つまえのピークが良い感じの高さだったらそれにする
     one_befor = peaks[idx - step]
     max_enel_index = one_befor + int(min_freq * window_size / sample_rate)
     max_enel_freq = max_enel_index * sample_rate / window_size
@@ -66,7 +40,7 @@ def look_back(peaks, idx, largest, largestfreq, th = 0.4, step = 1): #一つま�
     else:
         return largestfreq, largest,idx
 
-def peak_finder(freq_range):
+def peak_finder(window_size, sample_rate, freq_range, maximum_vol):
     suspect_freq=880 #A5
     peaks, _ = find_peaks(freq_range, distance=50, prominence=10)
     if len(peaks) < 1: #peakが無いなら0
@@ -83,11 +57,11 @@ def peak_finder(freq_range):
                 largestfreq = max_enel_freq
                 p_idx = idx
         if (len(peaks) > 3) and (p_idx == len(peaks)-1): #最後が選ばれていて、かつpeakが4つあったら二個前も見る
-            largestfreq, largest, p_idx = look_back(peaks, p_idx, largest, largestfreq, th=0.2, step=2)
+            largestfreq, largest, p_idx = look_back(window_size, sample_rate, peaks, p_idx, largest, largestfreq, freq_range, th=0.2, step=2)
         th = 0.15 #一個前のピークを選ぶ時の閾値
         while (largestfreq > suspect_freq):
             temp = largest
-            largestfreq, largest, p_idx = look_back(peaks, p_idx, largest, largestfreq, th=th)
+            largestfreq, largest, p_idx = look_back(window_size, sample_rate, peaks, p_idx, largest, largestfreq, freq_range, th=th)
             if largest==temp:
                 logger.debug("small peak is too small")
                 break
@@ -99,23 +73,6 @@ def peak_finder(freq_range):
         else:
             return 0
 
-# flagment秒ごとに区切ってフーリエ変換
-for i in range(0, len(data) - window_size, hop_size):
-    insert_flag = 0
-    peak_counter = 2 #peakをpeak_conter本目まで見る
-    window = data[i:i+window_size]
-    window = [(window[j][0]+window[j][1]) for j in range (len(window))]
-    freq = fft(window)
-    freq = np.abs(freq)[:window_size//2]
-    freq_range = freq[int(min_freq * window_size / sample_rate)+1:int(max_freq * window_size / sample_rate)+1]
-    result = peak_finder(freq_range) #0か周波数を返す関数
-    frequencies.append(result)
-    times.append(i / sample_rate)
-
-freq_time={}
-freq_time["time"] = times
-freq_time["freq"] = frequencies
-
 # 周波数を音階に変換する関数
 def freq_to_note(freq):
     if freq == 0:
@@ -126,75 +83,131 @@ def freq_to_note(freq):
     octave = int((note_number + 9) // 12)
     return notes[note_index] + str(octave)
 
-"""
-# 時間と周波数のグラフを作成
-plt.figure(figsize=(12, 6))
-plt.plot(times, frequencies)
-plt.xlabel('Time (s)')
-plt.ylabel('Frequency (Hz)')
-plt.title('Frequency over Time')
-plt.savefig("./freqs.png")
-plt.show()
-"""
+def main(path):
+    audio_file  = path #.flac .wav
+
+    # ボーカル抽出
+    vocal_file = extract_vocals(audio_file, working_dir)
+    logger.debug("extract done")
+    # .wavファイルの読み込み
+    sample_rate, data = wav.read(vocal_file)
+
+    # flagment秒ごとに区切るためのパラメータ
+    window_size = int(sample_rate * flagment)
+    hop_size = window_size
+
+    # 周波数と時間のリストを初期化
+    frequencies = []
+    times = []
+    # 最大振幅を検出
+    maximum_vol = 0
+    for i in range(0, len(data) - window_size, hop_size):
+        window = data[i:i+window_size]
+        window = [(window[j][0]+window[j][1]) for j in range (len(window))]
+        freq = fft(window)
+        freq = np.abs(freq)[:window_size//2]
+        freq_range = freq[int(min_freq * window_size / sample_rate):int(max_freq * window_size / sample_rate)]
+        if len(freq_range) > 0:
+            if np.max(freq_range) > maximum_vol:
+                maximum_vol = np.max(freq_range)
+
+    # flagment秒ごとに区切ってフーリエ変換
+    for i in range(0, len(data) - window_size, hop_size):
+        window = data[i:i+window_size]
+        window = [(window[j][0]+window[j][1]) for j in range (len(window))]
+        freq = fft(window)
+        freq = np.abs(freq)[:window_size//2]
+        freq_range = freq[int(min_freq * window_size / sample_rate)+1:int(max_freq * window_size / sample_rate)+1]
+        result = peak_finder(window_size, sample_rate, freq_range, maximum_vol) #0か周波数を返す関数
+        frequencies.append(result)
+        times.append(i / sample_rate)
+
+    freq_time={}
+    freq_time["time"] = times
+    freq_time["freq"] = frequencies
+
+    """
+    # 時間と周波数のグラフを作成
+    plt.figure(figsize=(12, 6))
+    plt.plot(times, frequencies)
+    plt.xlabel('Time (s)')
+    plt.ylabel('Frequency (Hz)')
+    plt.title('Frequency over Time')
+    plt.savefig("./freqs.png")
+    plt.show()
+    """
+
+    # 周波数を音階に変換
+    notes = [freq_to_note(freq) for freq in frequencies]
+
+    # 音階の存在時間を計算
+    note_durations = {}
+    current_note = notes[0]
+    start_time = times[0]
+
+    for i in range(1, len(notes)):
+        if notes[i] != current_note:
+            duration = times[i] - start_time
+            if current_note in note_durations:
+                note_durations[current_note] += duration
+            else:
+                note_durations[current_note] = duration
+            start_time = times[i]
+        current_note = notes[i]
+
+    #最後の音階の処理
+    duration = times[-1] - start_time
+    if current_note in note_durations:
+        note_durations[current_note] += duration
+    else:
+        note_durations[current_note] = duration
+
+    from collections import OrderedDict
+    # 音階の順序を定義
+    note_order = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+
+    # 'Silence'を除外し、数字が含まれるキーのみを抽出して音階と数字に分割
+    keys_split = [(key[:-1], int(key[-1])) for key in note_durations.keys() if key != 'Silence' and key[-1].isdigit()]
+
+    # 音階と数字でソート
+    sorted_keys = sorted(keys_split, key=lambda x: (x[1], note_order.index(x[0])))
+
+    # ソートされたキーを文字列に戻す
+    sorted_keys_str = [note + str(octave) for note, octave in sorted_keys]
+
+    # 新しい順序付き辞書を作成
+    new_dict = OrderedDict()
+    for key in sorted_keys_str:
+        new_dict[key] = note_durations[key]
+
+    #with open(os.path.join(working_dir,os.path.splitext(os.path.basename(audio_file))[0],"note.json"), "w") as fp:
+    #    json.dump(new_dict, fp, indent=2)
+
+    from executeSQL import run_sql
+    run_sql(freq_time, new_dict, os.path.splitext(os.path.basename(audio_file))[0])
 
 
-# 周波数を音階に変換
-notes = [freq_to_note(freq) for freq in frequencies]
+    """
+    #音階の存在時間のヒストグラムを作成
+    plt.figure(figsize=(12, 6))
+    plt.bar(new_dict.keys(), new_dict.values())
+    plt.xlabel('Note')
+    plt.ylabel('Duration (s)')
+    plt.title('Note Durations')
+    plt.xticks(rotation=45)
+    plt.savefig("./note.png")
+    """
+def search_files(directory, extensions):
+    file_list = []
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith(tuple(extensions)):
+                file_list.append(os.path.join(root, file))
+    return file_list
 
-# 音階の存在時間を計算
-note_durations = {}
-current_note = notes[0]
-start_time = times[0]
-
-for i in range(1, len(notes)):
-    if notes[i] != current_note:
-        duration = times[i] - start_time
-        if current_note in note_durations:
-            note_durations[current_note] += duration
-        else:
-            note_durations[current_note] = duration
-        start_time = times[i]
-    current_note = notes[i]
-
-#最後の音階の処理
-duration = times[-1] - start_time
-if current_note in note_durations:
-    note_durations[current_note] += duration
-else:
-    note_durations[current_note] = duration
-
-from collections import OrderedDict
-# 音階の順序を定義
-note_order = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-
-# 'Silence'を除外し、数字が含まれるキーのみを抽出して音階と数字に分割
-keys_split = [(key[:-1], int(key[-1])) for key in note_durations.keys() if key != 'Silence' and key[-1].isdigit()]
-
-# 音階と数字でソート
-sorted_keys = sorted(keys_split, key=lambda x: (x[1], note_order.index(x[0])))
-
-# ソートされたキーを文字列に戻す
-sorted_keys_str = [note + str(octave) for note, octave in sorted_keys]
-
-# 新しい順序付き辞書を作成
-new_dict = OrderedDict()
-for key in sorted_keys_str:
-    new_dict[key] = note_durations[key]
-
-#with open(os.path.join(working_dir,os.path.splitext(os.path.basename(audio_file))[0],"note.json"), "w") as fp:
-#    json.dump(new_dict, fp, indent=2)
-
-from executeSQL import run_sql
-run_sql(freq_time, new_dict, os.path.splitext(os.path.basename(audio_file))[0])
-
-
-"""
-#音階の存在時間のヒストグラムを作成
-plt.figure(figsize=(12, 6))
-plt.bar(new_dict.keys(), new_dict.values())
-plt.xlabel('Note')
-plt.ylabel('Duration (s)')
-plt.title('Note Durations')
-plt.xticks(rotation=45)
-plt.savefig("./note.png")
-"""
+if __name__ == "__main__":
+    music_dir = os.getenv('MUSIC_DIR')
+    extensions = ['.wav', '.flac', 'mp3']
+    music_files = search_files(music_dir, extensions)
+    for music in music_files:
+        main(music)
