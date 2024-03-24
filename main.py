@@ -112,11 +112,9 @@ for i in range(0, len(data) - window_size, hop_size):
     frequencies.append(result)
     times.append(i / sample_rate)
 
-ft={}
-ft["time"] = times
-ft["freq"] = frequencies
-with open(os.path.join(working_dir,os.path.splitext(os.path.basename(audio_file))[0],"freq_time.json"), "w") as f:
-    json.dump(ft, f, indent=2)
+freq_time={}
+freq_time["time"] = times
+freq_time["freq"] = frequencies
 
 # 周波数を音階に変換する関数
 def freq_to_note(freq):
@@ -183,10 +181,11 @@ new_dict = OrderedDict()
 for key in sorted_keys_str:
     new_dict[key] = note_durations[key]
 
-with open(os.path.join(working_dir,os.path.splitext(os.path.basename(audio_file))[0],"note.json"), "w") as fp:
-    json.dump(new_dict, fp, indent=2)
+#with open(os.path.join(working_dir,os.path.splitext(os.path.basename(audio_file))[0],"note.json"), "w") as fp:
+#    json.dump(new_dict, fp, indent=2)
 
-
+from executeSQL import run_sql
+run_sql(freq_time, new_dict, os.path.splitext(os.path.basename(audio_file))[0])
 
 
 """

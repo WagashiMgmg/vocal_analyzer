@@ -2,3 +2,4 @@
 /extracted/
 /__pycache__/
 *log*
+.env
