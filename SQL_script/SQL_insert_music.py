@@ -1,7 +1,10 @@
 from dotenv import load_dotenv
 import os
 import json
+import re
 
+def sanitize_filename(filename): # ' -> ''
+    return re.sub(r"'", r"''", filename)
 load_dotenv()
 db_user = os.getenv('DB_USER')
 db_pass = os.getenv('DB_PASS')
@@ -24,6 +27,7 @@ for i in range(len(all_note)):
    col_name.append('col'+str(i))
 
 def create_sql_script(frequdic, notedic, filename):
+    filename = sanitize_filename(filename)
     freq_json = json.dumps(frequdic)
     json_str = str(freq_json)
     new_dic = {}

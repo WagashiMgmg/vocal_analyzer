@@ -30,6 +30,9 @@ flagment = 0.17
 # 音声ファイルのパス
 
 def look_back(window_size, sample_rate, peaks, idx, largest, largestfreq, freq_range, th = 0.4, step = 1): #一つまえのピークが良い感じの高さだったらそれにする
+    print(f"len(peaks):{len(peaks)}")
+    print(f"mux_peak index:{idx}")
+    print(f"step:{step}")
     one_befor = peaks[idx - step]
     max_enel_index = one_befor + int(min_freq * window_size / sample_rate)
     max_enel_freq = max_enel_index * sample_rate / window_size
@@ -59,13 +62,14 @@ def peak_finder(window_size, sample_rate, freq_range, maximum_vol):
         if (len(peaks) > 3) and (p_idx == len(peaks)-1): #最後が選ばれていて、かつpeakが4つあったら二個前も見る
             largestfreq, largest, p_idx = look_back(window_size, sample_rate, peaks, p_idx, largest, largestfreq, freq_range, th=0.2, step=2)
         th = 0.15 #一個前のピークを選ぶ時の閾値
-        while (largestfreq > suspect_freq):
-            temp = largest
-            largestfreq, largest, p_idx = look_back(window_size, sample_rate, peaks, p_idx, largest, largestfreq, freq_range, th=th)
-            if largest==temp:
-                logger.debug("small peak is too small")
-                break
-            th -= 0.05
+        if len(peaks) > 1:
+            while (largestfreq > suspect_freq) and (p_idx >= 0):
+                temp = largest
+                largestfreq, largest, p_idx = look_back(window_size, sample_rate, peaks, p_idx, largest, largestfreq, freq_range, th=th)
+                if largest==temp:
+                    logger.debug("small peak is too small")
+                    break
+                th -= 0.05
         logger.debug([(p + int(min_freq * window_size / sample_rate)) * sample_rate / window_size for p in peaks])
         logger.debug(largestfreq)
         if ( len(freq_range) > 0 ) and ( largest > min_vol_rate * maximum_vol) : #閾値こえたら値を入れる
