@@ -1,11 +1,11 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from vocal_extraction import extract_vocals
+from vocal_extraction import Vocal_extracter
 import scipy.io.wavfile as wav
 from scipy.fftpack import fft
 from scipy.signal import find_peaks
-from logging import getLogger, config
+import logging
 import json
 from dotenv import load_dotenv
 load_dotenv()
@@ -14,7 +14,9 @@ working_dir = os.getenv('WORK_DIR')
 #with open('./log_config.json') as f:
 #    log_conf = json.load(f)
 #config.dictConfig(log_conf)
-logger = getLogger(__name__)
+logging.basicConfig(filename='main_running.log', encoding='utf-8')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 logger.info('start running')
 
 # 最小の音量
@@ -30,15 +32,12 @@ flagment = 0.17
 # 音声ファイルのパス
 
 def look_back(window_size, sample_rate, peaks, idx, largest, largestfreq, freq_range, th = 0.4, step = 1): #一つまえのピークが良い感じの高さだったらそれにする
-    print(f"len(peaks):{len(peaks)}")
-    print(f"mux_peak index:{idx}")
-    print(f"step:{step}")
     one_befor = peaks[idx - step]
     max_enel_index = one_befor + int(min_freq * window_size / sample_rate)
     max_enel_freq = max_enel_index * sample_rate / window_size
     max_enel = freq_range[one_befor]
     if max_enel > largest * th:
-        logger.debug("step back!"+str(step))
+        logger.info("step back!"+str(step))
         return max_enel_freq, max_enel,idx-step
     else:
         return largestfreq, largest,idx
@@ -67,7 +66,7 @@ def peak_finder(window_size, sample_rate, freq_range, maximum_vol):
                 temp = largest
                 largestfreq, largest, p_idx = look_back(window_size, sample_rate, peaks, p_idx, largest, largestfreq, freq_range, th=th)
                 if largest==temp:
-                    logger.debug("small peak is too small")
+                    logger.info("small peak is too small")
                     break
                 th -= 0.05
         logger.debug([(p + int(min_freq * window_size / sample_rate)) * sample_rate / window_size for p in peaks])
@@ -87,14 +86,16 @@ def freq_to_note(freq):
     octave = int((note_number + 9) // 12)
     return notes[note_index] + str(octave)
 
-def main(path):
+def main(path, VE):
     audio_file  = path #.flac .wav
 
     # ボーカル抽出
-    vocal_file = extract_vocals(audio_file, working_dir)
-    logger.debug("extract done")
+    logger.info("extract: start")
+    vocal_file = VE.extract_vocals(audio_file, working_dir)
+    logger.info("extract: done")
     # .wavファイルの読み込み
     sample_rate, data = wav.read(vocal_file)
+    music_length = data.shape[0]/sample_rate
 
     # flagment秒ごとに区切るためのパラメータ
     window_size = int(sample_rate * flagment)
@@ -126,10 +127,6 @@ def main(path):
         frequencies.append(result)
         times.append(i / sample_rate)
 
-    freq_time={}
-    freq_time["time"] = times
-    freq_time["freq"] = frequencies
-
     """
     # 時間と周波数のグラフを作成
     plt.figure(figsize=(12, 6))
@@ -143,6 +140,15 @@ def main(path):
 
     # 周波数を音階に変換
     notes = [freq_to_note(freq) for freq in frequencies]
+
+    # freq-time, note-timeをjsonに変換
+    freq_time={}
+    freq_time["time"] = times
+    freq_time["freq"] = frequencies
+
+    note_time={}
+    note_time["time"] = times
+    note_time["note"] = notes
 
     # 音階の存在時間を計算
     note_durations = {}
@@ -188,7 +194,7 @@ def main(path):
     #    json.dump(new_dict, fp, indent=2)
 
     from executeSQL import run_sql
-    run_sql(freq_time, new_dict, os.path.splitext(os.path.basename(audio_file))[0])
+    run_sql(music_length, freq_time, note_time, new_dict, os.path.splitext(os.path.basename(audio_file))[0])
 
 
     """
@@ -213,5 +219,7 @@ if __name__ == "__main__":
     music_dir = os.getenv('MUSIC_DIR')
     extensions = ['.wav', '.flac', 'mp3']
     music_files = search_files(music_dir, extensions)
+    VE = Vocal_extracter()
     for music in music_files:
-        main(music)
+        main(music,VE)
+    logger.info('finish running')

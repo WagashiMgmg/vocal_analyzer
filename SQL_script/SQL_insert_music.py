@@ -26,13 +26,14 @@ col_name=[]
 for i in range(len(all_note)):
    col_name.append('col'+str(i))
 
-def create_sql_script(frequdic, notedic, filename):
+def create_sql_script(music_length,frequdic, note_time, notedic, filename):
     filename = sanitize_filename(filename)
     freq_json = json.dumps(frequdic)
     json_str = str(freq_json)
+    note_json = str(json.dumps(note_time))
     new_dic = {}
-    cols = f"(title,FREQ_TIME,"
-    vals = f"('{filename}','{json_str}',"
+    cols = f"(title,music_length,FREQ_TIME,NOTE_TIME,"
+    vals = f"('{filename}',{music_length},'{json_str}','{note_json}',"
     for key, value in notedic.items():
         #serch key in col_name
         index = all_note.index(key)

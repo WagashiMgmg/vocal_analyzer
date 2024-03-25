@@ -4,25 +4,31 @@ import numpy as np
 from scipy.io import wavfile
 from scipy.signal import butter, lfilter
 
-def extract_vocals(audio_file, working_dir):
-    # 出力ファイルのパスを生成
-    output_path = working_dir
-    os.makedirs(output_path, exist_ok=True)
-    audio_name = os.path.splitext(os.path.basename(audio_file))[0]
-    vocal_file = os.path.join(output_path, audio_name, 'vocals.wav')
+separator = Separator('spleeter:2stems')
+class Vocal_extracter:
+    def __init__(self) -> None:
+        self.separator = Separator('spleeter:2stems')
 
-    # 2ステムモデル（ボーカルとその他の楽器）を使用
-    separator = Separator('spleeter:2stems')
+    def extract_vocals(self, audio_file, working_dir):
+        # 出力ファイルのパスを生成
+        output_path = working_dir
+        os.makedirs(output_path, exist_ok=True)
+        audio_name = os.path.splitext(os.path.basename(audio_file))[0]
+        vocal_file = os.path.join(output_path, audio_name, 'vocals.wav')
 
-    # 音声ファイルを分離
-    separator.separate_to_file(audio_file, output_path)
-    os.remove(os.path.join(output_path, audio_name, 'accompaniment.wav')) #vocal以外パートの削除
+        # 2ステムモデル（ボーカルとその他の楽器）を使用
+        print(audio_file)
 
-    #BPFの適用
-    #bpf_file   = os.path.join(output_path, audio_name, 'vocals_bpf.wav')
-    #BPF_for_vocal(vocal_file, bpf_file)
-    #return bpf_file
-    return vocal_file
+        # 音声ファイルを分離
+        print(audio_file)
+        self.separator.separate_to_file(audio_file, output_path)
+        os.remove(os.path.join(output_path, audio_name, 'accompaniment.wav')) #vocal以外パートの削除
+
+        #BPFの適用
+        #bpf_file   = os.path.join(output_path, audio_name, 'vocals_bpf.wav')
+        #BPF_for_vocal(vocal_file, bpf_file)
+        #return bpf_file
+        return vocal_file
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
@@ -62,6 +68,11 @@ def BPF_for_vocal(input_file, output_file):
     return output_file
 
 if __name__ == '__main__':
-    path = "sample"
-    result = extract_vocals(path)
+    from dotenv import load_dotenv
+    load_dotenv()
+    working_dir = os.getenv('WORK_DIR')
+    path = "/home/tkusumoto/music/music/0/STEINS_GATE_0_Original_Soundtrack_-_Gate_Of_Steiner_[FLAC]/[ASL] Abo Takeshi - STEINS;GATE 0 Original Soundtrack - Gate Of Steiner [FLAC] [w Scans]/02 Messenger -main theme-.flac"
+    VE = Vocal_extracter()
+
+    result = VE.extract_vocals(path, working_dir)
     print(result)
