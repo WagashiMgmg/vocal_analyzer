@@ -2,14 +2,12 @@ from dotenv import load_dotenv
 import os
 import json
 import re
+from executeSQL import run_sql
 
 def sanitize_filename(filename): # ' -> ''
     return re.sub(r"'", r"''", filename)
 load_dotenv()
-db_user = os.getenv('DB_USER')
-db_pass = os.getenv('DB_PASS')
-db_host = os.getenv('DB_HOST')
-db_name = os.getenv('DB_NAME')
+
 main_table = os.getenv('MAIN_TABLE')
 
 table_name = main_table
@@ -26,7 +24,7 @@ col_name=[]
 for i in range(len(all_note)):
    col_name.append('col'+str(i))
 
-def create_sql_script(music_length,frequdic, note_time, notedic, filename):
+def insert_music_db(music_length,frequdic, note_time, notedic, filename):
     filename = sanitize_filename(filename)
     freq_json = json.dumps(frequdic)
     json_str = str(freq_json)
@@ -45,4 +43,9 @@ def create_sql_script(music_length,frequdic, note_time, notedic, filename):
     vals = vals.rstrip(',') + ")"
 
     script = f"INSERT INTO {table_name} {cols} VALUES {vals};"
-    return script
+    try:
+        run_sql(script)
+    except Exception as e:
+        return "error when INSERT"
+    else:
+        return

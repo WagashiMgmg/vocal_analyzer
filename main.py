@@ -2,6 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from vocal_extraction import Vocal_extracter
+from SQL_script.SQL_check_music import check_bd
 import scipy.io.wavfile as wav
 from scipy.fftpack import fft
 from scipy.signal import find_peaks
@@ -16,7 +17,7 @@ working_dir = os.getenv('WORK_DIR')
 #config.dictConfig(log_conf)
 logging.basicConfig(filename='main_running.log', encoding='utf-8')
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 logger.info('start running')
 
 # 最小の音量
@@ -37,7 +38,7 @@ def look_back(window_size, sample_rate, peaks, idx, largest, largestfreq, freq_r
     max_enel_freq = max_enel_index * sample_rate / window_size
     max_enel = freq_range[one_befor]
     if max_enel > largest * th:
-        logger.info("step back!"+str(step))
+        logger.debug("step back!"+str(step))
         return max_enel_freq, max_enel,idx-step
     else:
         return largestfreq, largest,idx
@@ -66,7 +67,7 @@ def peak_finder(window_size, sample_rate, freq_range, maximum_vol):
                 temp = largest
                 largestfreq, largest, p_idx = look_back(window_size, sample_rate, peaks, p_idx, largest, largestfreq, freq_range, th=th)
                 if largest==temp:
-                    logger.info("small peak is too small")
+                    logger.debug("small peak is too small")
                     break
                 th -= 0.05
         logger.debug([(p + int(min_freq * window_size / sample_rate)) * sample_rate / window_size for p in peaks])
@@ -93,10 +94,21 @@ def main(path, VE):
     logger.info("extract: start")
     vocal_file = VE.extract_vocals(audio_file, working_dir)
     logger.info("extract: done")
-    # .wavファイルの読み込み
+    # vocalパートの読み込み
     sample_rate, data = wav.read(vocal_file)
+    # vocalパートの削除
+    os.remove(vocal_file)
     music_length = data.shape[0]/sample_rate
+    music_length = round(music_length, 3)
+    # 既にある曲は処理しない
+    music_already_in_db = check_bd(audio_file, music_length)
+    logger.info(f"chcked as {music_already_in_db}")
 
+    if music_already_in_db:
+        logger.info("music is in already in database")
+        return
+    else:
+        pass
     # flagment秒ごとに区切るためのパラメータ
     window_size = int(sample_rate * flagment)
     hop_size = window_size
@@ -193,9 +205,9 @@ def main(path, VE):
     #with open(os.path.join(working_dir,os.path.splitext(os.path.basename(audio_file))[0],"note.json"), "w") as fp:
     #    json.dump(new_dict, fp, indent=2)
 
-    from executeSQL import run_sql
-    run_sql(music_length, freq_time, note_time, new_dict, os.path.splitext(os.path.basename(audio_file))[0])
-
+    from SQL_script.SQL_insert_music import insert_music_db
+    message = insert_music_db(music_length, freq_time, note_time, new_dict, os.path.splitext(os.path.basename(audio_file))[0])
+    logger.info(f"message from insert function: {message}")
 
     """
     #音階の存在時間のヒストグラムを作成
