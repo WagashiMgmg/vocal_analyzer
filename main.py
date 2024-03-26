@@ -9,6 +9,8 @@ from scipy.signal import find_peaks
 import logging
 import json
 from dotenv import load_dotenv
+import time
+import datetime
 load_dotenv()
 working_dir = os.getenv('WORK_DIR')
 
@@ -231,7 +233,19 @@ if __name__ == "__main__":
     music_dir = os.getenv('MUSIC_DIR')
     extensions = ['.wav', '.flac', 'mp3']
     music_files = search_files(music_dir, extensions)
+    num_music_files = len(music_files)
+    logger.info(f"Music file: {num_music_files} files")
     VE = Vocal_extracter()
+    processed = 0
+    start = time.time()
     for music in music_files:
         main(music,VE)
+        processed+=1
+        progress = processed/num_music_files * 100
+        logger.info(f"processed {progress}%. ({processed}/{num_music_files})")
+        now = time.time()
+        logger.info(f"spend {now-start}")
+        finish = now + (now-start)/processed * (num_music_files - processed)
+        dt = datetime.datetime.fromtimestamp(finish)
+        logger.info(f"finish time estimated at {dt}")
     logger.info('finish running')

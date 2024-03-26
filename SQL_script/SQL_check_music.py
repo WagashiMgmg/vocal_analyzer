@@ -22,7 +22,7 @@ main_table = os.getenv('MAIN_TABLE')
 table_name = main_table
 def check_bd(audio_file, music_length):
     title = os.path.splitext(os.path.basename(audio_file))[0]
-
+    title = sanitize_filename(title)
     script = f"SELECT 1 FROM {table_name} WHERE title = '{title}' AND music_length = {music_length} LIMIT 1;"
     logger.info(script)
     check_result = run_sql(script)
